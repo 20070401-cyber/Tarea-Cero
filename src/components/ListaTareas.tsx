@@ -18,9 +18,9 @@
  */
 
 import React, { useState } from 'react';
-import { Check, CheckCircle2, Circle, Trash2, Calendar, AlertTriangle, Layers } from 'lucide-react';
+import { Check, CheckCircle2, Circle, Trash2, Calendar, AlertTriangle, Layers, ArrowUpDown } from 'lucide-react';
 import { FiltroEstado, Tarea } from '../types/tarea';
-import { estaVencida, esParaHoy, formatearFechaAmigable } from '../utils/dateUtils';
+import { estaVencida, esParaHoy, formatearFechaAmigable, parsearFechaLocal } from '../utils/dateUtils';
 
 interface ListaTareasProps {
   tareas: Tarea[];
@@ -40,21 +40,26 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
   // Estado para confirmar eliminación en celular sin window.confirm (que está prohibido en iframes)
   const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null);
 
-  // Filtrado de las tareas según la pestaña seleccionada
+  // 1. Filtrado de las tareas según el estado seleccionado (todas / pendientes / completadas)
   const tareasFiltradas = tareas.filter((t) => {
     if (filtro === 'pendientes') return !t.completada;
     if (filtro === 'completadas') return t.completada;
     return true; // 'todas'
   });
 
-  // Ordenamiento escolar intuitivo:
-  // 1. Tareas no completadas primero
-  // 2. Vencidas y con fecha más próxima primero
+  // 2. Ordenamiento estricto por fecha de entrega más cercana (cronológico ascendente)
+  // CUIDADO: No usar resta simple de strings. Usar timestamps locales para evitar desfases.
   const tareasOrdenadas = [...tareasFiltradas].sort((a, b) => {
-    if (a.completada !== b.completada) {
-      return a.completada ? 1 : -1;
+    const fechaA = parsearFechaLocal(a.fechaEntrega).getTime();
+    const fechaB = parsearFechaLocal(b.fechaEntrega).getTime();
+
+    if (fechaA !== fechaB) {
+      return fechaA - fechaB; // La fecha más próxima/cercana aparece primero
     }
-    return a.fechaEntrega.localeCompare(b.fechaEntrega);
+
+    // Criterio secundario de desempate: mayor prioridad primero
+    const pesoPrioridad = { Alta: 1, Media: 2, Baja: 3 };
+    return pesoPrioridad[a.prioridad] - pesoPrioridad[b.prioridad];
   });
 
   const conteoPendientes = tareas.filter((t) => !t.completada).length;
@@ -64,7 +69,7 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
     <section aria-label="Lista de tareas escolares" className="space-y-3">
       {/* Barra de control y filtros (Segmented control) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
           <Layers className="w-4 h-4 text-slate-500" />
           <h2 className="text-base font-bold text-slate-900">
             {filtro === 'pendientes' && 'Tareas Pendientes'}
@@ -74,10 +79,27 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
           <span className="text-xs font-semibold text-slate-500 tabular-nums">
             ({tareasFiltradas.length})
           </span>
+
+          {/* Indicador visual de ordenamiento por fecha más cercana */}
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+            <ArrowUpDown className="w-3 h-3 text-indigo-600" />
+            <span>Fecha más cercana</span>
+          </span>
         </div>
 
         {/* Control segmentado táctil para celulares */}
         <div className="flex items-center p-1 bg-slate-200/70 rounded-xl self-start sm:self-auto w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => alCambiarFiltro('todas')}
+            className={`flex-1 sm:flex-initial px-3 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg transition-all ${
+              filtro === 'todas'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Todas ({tareas.length})
+          </button>
           <button
             type="button"
             onClick={() => alCambiarFiltro('pendientes')}
@@ -99,17 +121,6 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
             }`}
           >
             Completadas ({conteoCompletadas})
-          </button>
-          <button
-            type="button"
-            onClick={() => alCambiarFiltro('todas')}
-            className={`flex-1 sm:flex-initial px-3 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg transition-all ${
-              filtro === 'todas'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Todas ({tareas.length})
           </button>
         </div>
       </div>
