@@ -17,10 +17,16 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckSquare, BookOpen, Plus, GraduationCap } from 'lucide-react';
+import { CheckSquare, BookOpen, Plus, GraduationCap, Download, RotateCcw } from 'lucide-react';
 import { Tarea, FiltroEstado, MetricasTareas } from './types/tarea';
 import { estaVencida, esParaHoy, esFechaDeHoy } from './utils/dateUtils';
-import { cargarTareasDesdeStorage, guardarTareasEnStorage } from './utils/storage';
+import {
+  cargarTareasDesdeStorage,
+  guardarTareasEnStorage,
+  exportarTareasAJSON,
+  borrarTareasDeStorage,
+  generarTareasIniciales
+} from './utils/storage';
 import { IndicadoresRapidos } from './components/IndicadoresRapidos';
 import { FormularioTarea } from './components/FormularioTarea';
 import { ListaTareas } from './components/ListaTareas';
@@ -120,6 +126,16 @@ export default function App() {
     setTareas((prev) => prev.filter((t) => t.id !== id));
   };
 
+  /**
+   * Restablecer las 3 tareas de ejemplo por defecto
+   */
+  const restablecerEjemplos = () => {
+    borrarTareasDeStorage();
+    const iniciales = generarTareasIniciales();
+    setTareas(iniciales);
+    guardarTareasEnStorage(iniciales);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 pb-16">
       {/* Barra superior (Top Bar Contract) */}
@@ -137,12 +153,24 @@ export default function App() {
             </div>
           </div>
 
-          {/* Zona 2 & 3: Indicador sutil de bachillerato y acción rápida */}
+          {/* Zona 2 & 3: Indicador sutil de bachillerato y acción rápida de respaldo */}
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium bg-slate-100 px-2.5 py-1 rounded-lg">
+            <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium bg-slate-100 px-2.5 py-1 rounded-lg">
               <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
               <span>Bachillerato</span>
             </span>
+
+            {/* Botón para Exportar / Respaldar a JSON */}
+            <button
+              type="button"
+              onClick={() => exportarTareasAJSON(tareas)}
+              title="Descargar copia de seguridad en archivo JSON"
+              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors flex items-center gap-1.5 min-h-[36px]"
+            >
+              <Download className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">Respaldar JSON</span>
+              <span className="sm:hidden">Backup</span>
+            </button>
 
             <button
               type="button"
@@ -194,6 +222,30 @@ export default function App() {
           alAlternarCompletada={alternarCompletada}
           alEliminarTarea={eliminarTarea}
         />
+
+        {/* Pie de página con utilidades de almacenamiento */}
+        <footer className="pt-6 pb-2 text-center flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 border-t border-slate-200/80">
+          <span>Datos guardados en tu navegador (localStorage)</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={restablecerEjemplos}
+              className="text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-1 font-medium"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restablecer 3 tareas de ejemplo</span>
+            </button>
+            <span aria-hidden="true" className="text-slate-300">·</span>
+            <button
+              type="button"
+              onClick={() => exportarTareasAJSON(tareas)}
+              className="text-indigo-600 hover:text-indigo-700 transition-colors font-medium flex items-center gap-1"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Descargar copia .json</span>
+            </button>
+          </div>
+        </footer>
       </main>
     </div>
   );
