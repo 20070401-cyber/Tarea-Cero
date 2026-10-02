@@ -1,23 +1,18 @@
 /**
  * Tarea Cero - Aplicación principal
- *
- * Diseñada para estudiantes de bachillerato:
- * 1. Formulario para registrar una nueva tarea (Materia, Título, Fecha de entrega y Prioridad).
- * 2. Lista visual de tareas pendientes con opción de marcar como completada o eliminar.
- * 3. Indicador rápido que muestra cuántas pendientes hay, cuántas vencidas y cuántas entregadas hoy.
- *
- * ⚠️ PUNTOS DONDE LA GENTE SUELE EQUIVOCARSE:
- * 1. Estado desincronizado con localStorage: Si se usa un `useEffect` que depende de `tareas`
- *    para guardar, asegurarse de no sobreescribir el almacenamiento con un array vacío en el primer render.
- * 2. Cálculo de métricas sin `useMemo`: En listas largas o actualizaciones frecuentes,
- *    recalcular los filtros en cada re-render innecesario degrada el rendimiento en móviles de gama media/baja.
- * 3. Generación de IDs con `crypto.randomUUID()`: Si el navegador es antiguo o no corre
- *    en HTTPS (contexto inseguro), `crypto.randomUUID` puede ser `undefined`. Implementamos
- *    un generador seguro con fallback automático.
+ * 
+ * Cumplimiento de requisitos de interfaz:
+ * 1. Uso fluido desde 320 px de ancho con una sola mano, sin necesidad de hacer zoom.
+ * 2. Contraste óptimo para exteriores y lectura bajo el sol; texto nunca menor a 16 px.
+ * 3. Todos los campos de entrada cuentan con etiqueta visible.
+ * 4. UN SOLO botón principal por pantalla: "+ Agregar Tarea"; los demás son secundarios.
+ * 5. Estado vacío con la frase animada:
+ *    "🎉 ¡Felicidades! No tienes tareas pendientes. Toca '+' para agregar una."
+ * 6. Mensajes de éxito y error visibles, en español y sin terminología técnica.
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckSquare, BookOpen, Plus, GraduationCap, Download, RotateCcw } from 'lucide-react';
+import { CheckSquare, BookOpen, GraduationCap, Download, RotateCcw, CheckCircle2, X } from 'lucide-react';
 import { Tarea, FiltroEstado, MetricasTareas } from './types/tarea';
 import { estaVencida, esParaHoy, esFechaDeHoy } from './utils/dateUtils';
 import {
@@ -31,10 +26,6 @@ import { IndicadoresRapidos } from './components/IndicadoresRapidos';
 import { FormularioTarea } from './components/FormularioTarea';
 import { ListaTareas } from './components/ListaTareas';
 
-/**
- * Generador de ID robusto con fallback para evitar cuelgues si `crypto.randomUUID`
- * no está disponible en un navegador escolar o webview restringido.
- */
 function generarIdSeguro(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -43,19 +34,25 @@ function generarIdSeguro(): string {
 }
 
 export default function App() {
-  // Inicialización diferida usando función para no leer localStorage en cada render
   const [tareas, setTareas] = useState<Tarea[]>(() => cargarTareasDesdeStorage());
   const [filtroActivo, setFiltroActivo] = useState<FiltroEstado>('pendientes');
-  const [mostrarFormularioMobile, setMostrarFormularioMobile] = useState<boolean>(true);
 
-  // Sincronizar con localStorage en cada cambio de tareas
+  // Mensaje de éxito visible en español claro (desaparece a los 4 segundos o al cerrarlo)
+  const [mensajeExito, setMensajeExito] = useState<string | null>(null);
+
   useEffect(() => {
     guardarTareasEnStorage(tareas);
   }, [tareas]);
 
-  /**
-   * Cálculo reactivo y memorizado de los indicadores rápidos
-   */
+  // Temporizador para limpiar el mensaje de éxito
+  useEffect(() => {
+    if (!mensajeExito) return;
+    const timer = setTimeout(() => {
+      setMensajeExito(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [mensajeExito]);
+
   const metricas: MetricasTareas = useMemo(() => {
     let totalPendientes = 0;
     let vencidas = 0;
@@ -71,7 +68,6 @@ export default function App() {
           paraHoy++;
         }
       } else {
-        // Tareas marcadas como completadas hoy
         if (esFechaDeHoy(tarea.completadaEn)) {
           entregadasHoy++;
         }
@@ -82,7 +78,7 @@ export default function App() {
   }, [tareas]);
 
   /**
-   * 1. Registrar nueva tarea
+   * Registrar nueva tarea con mensaje de éxito visible
    */
   const agregarTarea = (datosNuevaTarea: Omit<Tarea, 'id' | 'completada' | 'creadaEn'>) => {
     const nueva: Tarea = {
@@ -92,17 +88,16 @@ export default function App() {
       creadaEn: new Date().toISOString()
     };
 
-    // Agregamos al inicio para que el estudiante vea su nueva tarea de inmediato
     setTareas((prev) => [nueva, ...prev]);
+    setMensajeExito('¡Tarea guardada con éxito! Ya la puedes ver en tu lista.');
 
-    // Si estaba viendo solo completadas, cambiar a pendientes para ver la tarea recién creada
     if (filtroActivo === 'completadas') {
       setFiltroActivo('pendientes');
     }
   };
 
   /**
-   * 2. Marcar como completada o pendiente
+   * Alternar estado de completada con mensaje de éxito visible
    */
   const alternarCompletada = (id: string) => {
     setTareas((prev) =>
@@ -110,6 +105,12 @@ export default function App() {
         if (t.id !== id) return t;
 
         const nuevoEstado = !t.completada;
+        if (nuevoEstado) {
+          setMensajeExito(`¡Excelente trabajo! Marcaste como terminada la tarea de ${t.materia}.`);
+        } else {
+          setMensajeExito(`La tarea de ${t.materia} volvió a tu lista de pendientes.`);
+        }
+
         return {
           ...t,
           completada: nuevoEstado,
@@ -120,101 +121,113 @@ export default function App() {
   };
 
   /**
-   * 2. Eliminar tarea
+   * Eliminar tarea con confirmación
    */
   const eliminarTarea = (id: string) => {
     setTareas((prev) => prev.filter((t) => t.id !== id));
+    setMensajeExito('La tarea fue eliminada de tu lista.');
   };
 
   /**
-   * Restablecer las 3 tareas de ejemplo por defecto
+   * Restablecer 3 tareas de ejemplo
    */
   const restablecerEjemplos = () => {
     borrarTareasDeStorage();
     const iniciales = generarTareasIniciales();
     setTareas(iniciales);
     guardarTareasEnStorage(iniciales);
+    setMensajeExito('Se restablecieron las 3 tareas de ejemplo.');
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 pb-16">
-      {/* Barra superior (Top Bar Contract) */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          {/* Zona 1: Título de marca */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
-              <CheckSquare className="w-4 h-4 stroke-[2.5]" />
+    <div className="min-h-screen bg-slate-100 text-slate-900 pb-16">
+      {/* 
+        Barra superior: Todos los botones son SECUNDARIOS para preservar 
+        "+ Agregar Tarea" como único botón principal en pantalla.
+      */}
+      <header className="sticky top-0 z-30 bg-white/98 backdrop-blur-md border-b-2 border-slate-300">
+        <div className="max-w-2xl mx-auto px-3 sm:px-5 h-16 flex items-center justify-between gap-2">
+          {/* Marca con alto contraste */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-700 text-white flex items-center justify-center shadow-xs">
+              <CheckSquare className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
-              <span className="text-base font-bold tracking-tight text-slate-900 block leading-tight">
+              <span className="text-lg sm:text-xl font-black tracking-tight text-slate-950 block leading-tight">
                 TAREA CERO
               </span>
             </div>
           </div>
 
-          {/* Zona 2 & 3: Indicador sutil de bachillerato y acción rápida de respaldo */}
+          {/* Acciones secundarias en barra superior */}
           <div className="flex items-center gap-2">
-            <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium bg-slate-100 px-2.5 py-1 rounded-lg">
-              <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-base text-slate-800 font-bold bg-slate-100 border border-slate-300 px-3 py-1 rounded-lg">
+              <GraduationCap className="w-4 h-4 text-indigo-700" />
               <span>Bachillerato</span>
             </span>
 
-            {/* Botón para Exportar / Respaldar a JSON */}
+            {/* Botón secundario para respaldar */}
             <button
               type="button"
               onClick={() => exportarTareasAJSON(tareas)}
               title="Descargar copia de seguridad en archivo JSON"
-              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors flex items-center gap-1.5 min-h-[36px]"
+              className="text-base font-bold px-3 py-2 rounded-xl border-2 border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-900 transition-colors flex items-center gap-1.5 min-h-[44px]"
             >
-              <Download className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">Respaldar JSON</span>
-              <span className="sm:hidden">Backup</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMostrarFormularioMobile((prev) => !prev)}
-              className="sm:hidden text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors flex items-center gap-1 min-h-[36px]"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{mostrarFormularioMobile ? 'Ocultar' : 'Nueva'}</span>
+              <Download className="w-4 h-4 text-indigo-700" />
+              <span>Respaldar</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Contenido principal centrado para celular y escritorio */}
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-5 space-y-5">
-        {/* Encabezado descriptivo amigable para el estudiante */}
-        <section className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Planificador escolar</span>
+      {/* Contenido centrado y totalmente accesible desde 320 px */}
+      <main className="max-w-2xl mx-auto px-3 sm:px-5 pt-4 space-y-4">
+        {/* REQUISITO 6: Mensaje de éxito visible en español claro */}
+        {mensajeExito && (
+          <div
+            role="status"
+            className="flex items-center justify-between gap-3 p-4 bg-emerald-100 border-2 border-emerald-500 text-emerald-950 rounded-2xl shadow-sm text-base font-bold animate-in fade-in duration-200"
+          >
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-6 h-6 text-emerald-700 shrink-0" />
+              <span>{mensajeExito}</span>
             </div>
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">
-              Organiza tus pendientes sin complicaciones
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Registra tus deberes escolares, controla qué urge entregar hoy y mantén tu lista en cero.
-            </p>
+            <button
+              type="button"
+              onClick={() => setMensajeExito(null)}
+              aria-label="Cerrar mensaje"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-emerald-800 hover:text-emerald-950 rounded-lg hover:bg-emerald-200/60"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
+        )}
+
+        {/* Encabezado descriptivo con texto >= 16 px */}
+        <section className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-slate-300 shadow-xs">
+          <div className="flex items-center gap-2 text-base font-extrabold text-indigo-800 uppercase tracking-wider mb-1">
+            <BookOpen className="w-4 h-4" />
+            <span>Organizador escolar</span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-950 leading-tight">
+            Tus tareas escolares al día
+          </h1>
+          <p className="text-base font-semibold text-slate-700 mt-1.5 leading-relaxed">
+            Revisa qué debes entregar hoy y mantén tu lista de pendientes en cero.
+          </p>
         </section>
 
-        {/* 3. Indicador rápido */}
+        {/* Indicadores rápidos (2x2 en 320 px, texto >= 16 px, alto contraste) */}
         <IndicadoresRapidos
           metricas={metricas}
           filtroActivo={filtroActivo}
           alSeleccionarFiltro={(nuevoFiltro) => setFiltroActivo(nuevoFiltro)}
         />
 
-        {/* 1. Formulario de registro */}
-        <div className={mostrarFormularioMobile ? 'block' : 'hidden sm:block'}>
-          <FormularioTarea alGuardarTarea={agregarTarea} />
-        </div>
+        {/* Formulario con el ÚNICO botón principal ("+ Agregar Tarea") */}
+        <FormularioTarea alGuardarTarea={agregarTarea} />
 
-        {/* 2. Lista visual de tareas */}
+        {/* Lista visual con estado vacío animado y filtros secundarios */}
         <ListaTareas
           tareas={tareas}
           filtro={filtroActivo}
@@ -223,26 +236,17 @@ export default function App() {
           alEliminarTarea={eliminarTarea}
         />
 
-        {/* Pie de página con utilidades de almacenamiento */}
-        <footer className="pt-6 pb-2 text-center flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 border-t border-slate-200/80">
-          <span>Datos guardados en tu navegador (localStorage)</span>
+        {/* Pie de página accesible */}
+        <footer className="pt-6 pb-4 text-center flex flex-col sm:flex-row items-center justify-between gap-3 text-base text-slate-700 font-semibold border-t-2 border-slate-300">
+          <span>Datos guardados en tu dispositivo</span>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={restablecerEjemplos}
-              className="text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-1 font-medium"
+              className="text-slate-800 hover:text-indigo-800 transition-colors flex items-center gap-1.5 underline decoration-slate-400 p-2 min-h-[44px]"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Restablecer 3 tareas de ejemplo</span>
-            </button>
-            <span aria-hidden="true" className="text-slate-300">·</span>
-            <button
-              type="button"
-              onClick={() => exportarTareasAJSON(tareas)}
-              className="text-indigo-600 hover:text-indigo-700 transition-colors font-medium flex items-center gap-1"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Descargar copia .json</span>
+              <RotateCcw className="w-4 h-4" />
+              <span>Restablecer ejemplos</span>
             </button>
           </div>
         </footer>

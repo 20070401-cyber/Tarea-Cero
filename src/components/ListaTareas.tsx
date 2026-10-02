@@ -1,24 +1,17 @@
 /**
  * Componente: ListaTareas
- * Muestra la lista visual de tareas pendientes con:
- * - Opción de marcar como completada (o desmarcar)
- * - Opción de eliminar con confirmación preventiva
- * - Filtros rápidos: Pendientes / Completadas / Todas
- *
- * ⚠️ PUNTOS DONDE LA GENTE SUELE EQUIVOCARSE:
- * 1. Usar el índice del array como `key` en React (`key={index}`):
- *    Cuando el estudiante elimina una tarea o marca una como completada,
- *    React reutilizará los nodos del DOM por índice, provocando glitches visuales
- *    donde el checkbox de la tarea equivocada parece marcarse. Siempre usar `key={tarea.id}`.
- * 2. Mutar el arreglo original: En React nunca se debe hacer `tareas.splice()` o
- *    `tarea.completada = true` directamente. Siempre se debe crear una copia con
- *    `.map()` o `.filter()`.
- * 3. En pantallas táctiles móviles, los botones de eliminar muy pequeños se tocan por
- *    accidente mientras se hace scroll. Agregamos un hitbox generoso y un paso de confirmación.
+ * 
+ * Cumplimiento de requisitos de interfaz:
+ * - 320 px de ancho: Operable con una sola mano y sin hacer zoom.
+ * - Alto contraste para exteriores y lectura bajo el sol.
+ * - Tipografía mínima de 16 px en títulos, materias, fechas y botones.
+ * - Botones secundarios (para mantener "+ Agregar Tarea" como único botón principal).
+ * - Estado vacío con la frase animada solicitada:
+ *   "🎉 ¡Felicidades! No tienes tareas pendientes. Toca '+' para agregar una."
  */
 
 import React, { useState } from 'react';
-import { Check, CheckCircle2, Circle, Trash2, Calendar, AlertTriangle, Layers, ArrowUpDown } from 'lucide-react';
+import { Check, Circle, Trash2, Calendar, AlertTriangle, Layers, ArrowUpDown, Sparkles } from 'lucide-react';
 import { FiltroEstado, Tarea } from '../types/tarea';
 import { estaVencida, esParaHoy, formatearFechaAmigable, parsearFechaLocal } from '../utils/dateUtils';
 
@@ -37,27 +30,24 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
   alAlternarCompletada,
   alEliminarTarea
 }) => {
-  // Estado para confirmar eliminación en celular sin window.confirm (que está prohibido en iframes)
   const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null);
 
-  // 1. Filtrado de las tareas según el estado seleccionado (todas / pendientes / completadas)
+  // 1. Filtrado de tareas según estado
   const tareasFiltradas = tareas.filter((t) => {
     if (filtro === 'pendientes') return !t.completada;
     if (filtro === 'completadas') return t.completada;
     return true; // 'todas'
   });
 
-  // 2. Ordenamiento estricto por fecha de entrega más cercana (cronológico ascendente)
-  // CUIDADO: No usar resta simple de strings. Usar timestamps locales para evitar desfases.
+  // 2. Ordenamiento por fecha más cercana
   const tareasOrdenadas = [...tareasFiltradas].sort((a, b) => {
     const fechaA = parsearFechaLocal(a.fechaEntrega).getTime();
     const fechaB = parsearFechaLocal(b.fechaEntrega).getTime();
 
     if (fechaA !== fechaB) {
-      return fechaA - fechaB; // La fecha más próxima/cercana aparece primero
+      return fechaA - fechaB;
     }
 
-    // Criterio secundario de desempate: mayor prioridad primero
     const pesoPrioridad = { Alta: 1, Media: 2, Baja: 3 };
     return pesoPrioridad[a.prioridad] - pesoPrioridad[b.prioridad];
   });
@@ -66,36 +56,35 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
   const conteoCompletadas = tareas.filter((t) => t.completada).length;
 
   return (
-    <section aria-label="Lista de tareas escolares" className="space-y-3">
-      {/* Barra de control y filtros (Segmented control) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-1">
+    <section aria-label="Lista de deberes escolares" className="space-y-3.5">
+      {/* Barra de control y filtros (Botones secundarios) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div className="flex items-center flex-wrap gap-2">
-          <Layers className="w-4 h-4 text-slate-500" />
-          <h2 className="text-base font-bold text-slate-900">
+          <Layers className="w-5 h-5 text-slate-800" />
+          <h2 className="text-xl font-bold text-slate-950">
             {filtro === 'pendientes' && 'Tareas Pendientes'}
             {filtro === 'completadas' && 'Tareas Completadas'}
             {filtro === 'todas' && 'Todas las Tareas'}
           </h2>
-          <span className="text-xs font-semibold text-slate-500 tabular-nums">
+          <span className="text-base font-bold text-slate-700 tabular-nums">
             ({tareasFiltradas.length})
           </span>
 
-          {/* Indicador visual de ordenamiento por fecha más cercana */}
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
-            <ArrowUpDown className="w-3 h-3 text-indigo-600" />
+          <span className="inline-flex items-center gap-1 text-base font-semibold text-indigo-900 bg-indigo-100 px-2.5 py-0.5 rounded-lg border border-indigo-300">
+            <ArrowUpDown className="w-4 h-4 text-indigo-700" />
             <span>Fecha más cercana</span>
           </span>
         </div>
 
-        {/* Control segmentado táctil para celulares */}
-        <div className="flex items-center p-1 bg-slate-200/70 rounded-xl self-start sm:self-auto w-full sm:w-auto">
+        {/* Filtros segmentados táctiles (Secundarios) */}
+        <div className="flex items-center p-1 bg-slate-200 border border-slate-300 rounded-xl w-full sm:w-auto">
           <button
             type="button"
             onClick={() => alCambiarFiltro('todas')}
-            className={`flex-1 sm:flex-initial px-3 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg transition-all ${
+            className={`flex-1 sm:flex-initial px-3 py-2 min-h-[44px] text-base font-bold rounded-lg transition-all ${
               filtro === 'todas'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-slate-950 shadow-sm border border-slate-300'
+                : 'text-slate-800 hover:text-slate-950'
             }`}
           >
             Todas ({tareas.length})
@@ -103,10 +92,10 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
           <button
             type="button"
             onClick={() => alCambiarFiltro('pendientes')}
-            className={`flex-1 sm:flex-initial px-3 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg transition-all ${
+            className={`flex-1 sm:flex-initial px-3 py-2 min-h-[44px] text-base font-bold rounded-lg transition-all ${
               filtro === 'pendientes'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-slate-950 shadow-sm border border-slate-300'
+                : 'text-slate-800 hover:text-slate-950'
             }`}
           >
             Pendientes ({conteoPendientes})
@@ -114,10 +103,10 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
           <button
             type="button"
             onClick={() => alCambiarFiltro('completadas')}
-            className={`flex-1 sm:flex-initial px-3 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg transition-all ${
+            className={`flex-1 sm:flex-initial px-3 py-2 min-h-[44px] text-base font-bold rounded-lg transition-all ${
               filtro === 'completadas'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-slate-950 shadow-sm border border-slate-300'
+                : 'text-slate-800 hover:text-slate-950'
             }`}
           >
             Completadas ({conteoCompletadas})
@@ -125,31 +114,33 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
         </div>
       </div>
 
-      {/* Estado vacío cuando no hay tareas en la vista seleccionada */}
+      {/* 
+        REQUISITO 5: ESTADO VACÍO CON FRASE ANIMADA
+        "🎉 ¡Felicidades! No tienes tareas pendientes. Toca '+' para agregar una."
+      */}
       {tareasOrdenadas.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center flex flex-col items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
-            <CheckCircle2 className="w-6 h-6" />
+        <div className="bg-white rounded-2xl border-2 border-slate-300 p-6 sm:p-8 text-center flex flex-col items-center justify-center shadow-xs">
+          <div className="animacion-felicidades w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 border-2 border-amber-300 flex items-center justify-center mb-3">
+            <Sparkles className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 mb-1">
-            {filtro === 'pendientes'
-              ? '¡Objetivo Tarea Cero alcanzado!'
-              : filtro === 'completadas'
-              ? 'No tienes tareas completadas aún'
-              : 'No hay ninguna tarea registrada'}
-          </h3>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-sm">
-            {filtro === 'pendientes'
-              ? 'Estás al día con todos tus deberes escolares de bachillerato. ¡Excelente trabajo!'
-              : filtro === 'completadas'
-              ? 'A medida que termines tus deberes y los marques como hechos, se guardarán aquí.'
-              : 'Usa el formulario superior para registrar la primera tarea de tus materias.'}
+
+          {/* Frase animada exacta solicitada */}
+          <div className="animacion-felicidades max-w-md">
+            <p className="text-lg sm:text-xl font-extrabold text-slate-950 leading-relaxed">
+              🎉 ¡Felicidades! No tienes tareas pendientes. Toca '+' para agregar una.
+            </p>
+          </div>
+
+          <p className="text-base font-medium text-slate-700 mt-2">
+            {filtro === 'completadas'
+              ? 'Cuando termines tareas de tus materias escolares, las verás aquí.'
+              : 'Disfruta tu tiempo libre o aprovecha para adelantar materias escolares.'}
           </p>
         </div>
       )}
 
-      {/* Lista de tarjetas de tareas */}
-      <div className="space-y-2.5">
+      {/* Lista de tarjetas con alto contraste y texto >= 16 px */}
+      <div className="space-y-3">
         {tareasOrdenadas.map((tarea) => {
           const vencida = !tarea.completada && estaVencida(tarea.fechaEntrega);
           const paraHoy = !tarea.completada && esParaHoy(tarea.fechaEntrega);
@@ -159,110 +150,105 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
           return (
             <article
               key={tarea.id}
-              className={`group bg-white rounded-2xl border transition-all p-3.5 sm:p-4 ${
+              className={`bg-white rounded-2xl border-2 transition-all p-4 ${
                 tarea.completada
-                  ? 'border-slate-200/70 bg-slate-50/60 opacity-80'
+                  ? 'border-slate-300 bg-slate-100/90 opacity-90'
                   : vencida
-                  ? 'border-rose-300 bg-rose-50/30'
+                  ? 'border-rose-400 bg-rose-50/60'
                   : paraHoy
-                  ? 'border-amber-300 bg-amber-50/20'
-                  : 'border-slate-200/90 hover:border-slate-300'
+                  ? 'border-amber-400 bg-amber-50/60'
+                  : 'border-slate-300 hover:border-slate-400'
               }`}
             >
               <div className="flex items-start gap-3">
-                {/* 
-                  Hitbox de marcado accesible (mínimo 44x44px en touch).
-                  Permite al estudiante marcar su tarea rápidamente.
-                */}
+                {/* Botón táctil secundario de marcar completada (mínimo 48x48 px) */}
                 <button
                   type="button"
                   onClick={() => alAlternarCompletada(tarea.id)}
-                  aria-label={tarea.completada ? `Marcar ${tarea.titulo} como pendiente` : `Completar tarea ${tarea.titulo}`}
-                  className="min-w-[44px] min-h-[44px] flex items-center justify-center -ml-2 -mt-1 rounded-xl text-slate-400 hover:text-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0"
+                  aria-label={tarea.completada ? `Marcar pendiente: ${tarea.titulo}` : `Completar: ${tarea.titulo}`}
+                  className="min-w-[48px] min-h-[48px] flex items-center justify-center -ml-1 -mt-1 rounded-xl text-slate-600 hover:text-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 shrink-0"
                 >
                   {tarea.completada ? (
-                    <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-sm">
-                      <Check className="w-4 h-4 stroke-[3]" />
+                    <div className="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-sm">
+                      <Check className="w-5 h-5 stroke-[3]" />
                     </div>
                   ) : (
-                    <Circle className="w-6 h-6 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                    <Circle className="w-8 h-8 text-slate-700 hover:text-indigo-700 stroke-[2.5] transition-colors" />
                   )}
                 </button>
 
                 {/* Contenido principal de la tarea */}
                 <div className="flex-1 min-w-0 pt-0.5">
-                  {/* Fila de metadatos limpios (sin pill badges estáticos, según directriz de diseño) */}
-                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-slate-500 mb-1">
-                    <span className="font-semibold text-slate-900">
+                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-base font-bold text-slate-900 mb-1">
+                    <span className="text-slate-950 underline decoration-indigo-300 underline-offset-2">
                       {tarea.materia}
                     </span>
-                    <span aria-hidden="true" className="text-slate-300">·</span>
-                    <span className={`font-medium ${
-                      tarea.prioridad === 'Alta' ? 'text-rose-600 font-semibold' :
-                      tarea.prioridad === 'Media' ? 'text-amber-600 font-semibold' : 'text-slate-500'
+                    <span aria-hidden="true" className="text-slate-400">·</span>
+                    <span className={`${
+                      tarea.prioridad === 'Alta' ? 'text-rose-900 font-extrabold' :
+                      tarea.prioridad === 'Media' ? 'text-amber-900 font-extrabold' : 'text-slate-800'
                     }`}>
                       Prioridad {tarea.prioridad}
                     </span>
                   </div>
 
-                  {/* Título de la tarea */}
+                  {/* Título de la tarea (mínimo 16 px, aquí 18 px para jerarquía) */}
                   <h3
-                    className={`text-sm sm:text-base font-semibold leading-snug break-words ${
+                    className={`text-lg sm:text-xl font-bold leading-snug break-words ${
                       tarea.completada
-                        ? 'line-through text-slate-400'
-                        : 'text-slate-900'
+                        ? 'line-through text-slate-600'
+                        : 'text-slate-950'
                     }`}
                   >
                     {tarea.titulo}
                   </h3>
 
-                  {/* Fecha de entrega y estados contextuales */}
-                  <div className="flex items-center flex-wrap gap-2 mt-2 text-xs">
-                    <div className="flex items-center gap-1 text-slate-600">
-                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                  {/* Fecha de entrega e indicadores de estado */}
+                  <div className="flex items-center flex-wrap gap-2.5 mt-2.5 text-base">
+                    <div className="flex items-center gap-1.5 text-slate-900 font-semibold">
+                      <Calendar className="w-4 h-4 text-slate-700 shrink-0" />
                       <span>{fechaInfo.texto}</span>
                     </div>
 
-                    {/* Alerta de Vencida o Entrega Hoy */}
                     {vencida && (
-                      <div className="flex items-center gap-1 font-semibold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded">
-                        <AlertTriangle className="w-3 h-3 text-rose-600" />
-                        <span>¡Vencida! ({fechaInfo.relativo})</span>
+                      <div className="flex items-center gap-1 font-bold text-rose-950 bg-rose-200 px-2.5 py-1 rounded-lg border border-rose-400">
+                        <AlertTriangle className="w-4 h-4 text-rose-800 shrink-0" />
+                        <span>¡Atrasada! ({fechaInfo.relativo})</span>
                       </div>
                     )}
 
                     {paraHoy && !vencida && (
-                      <div className="flex items-center gap-1 font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                      <div className="flex items-center gap-1 font-bold text-amber-950 bg-amber-200 px-2.5 py-1 rounded-lg border border-amber-400">
                         <span>⚠️ ¡Se entrega hoy!</span>
                       </div>
                     )}
 
                     {tarea.completada && (
-                      <span className="text-emerald-700 font-medium">
-                        ✓ Completada
+                      <span className="font-bold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
+                        ✓ Tarea completada
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Acciones: Botón de Eliminar con confirmación táctil segura */}
+                {/* Botón secundario para eliminar */}
                 <div className="shrink-0 flex items-center">
                   {confirmandoEliminar ? (
-                    <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 p-1 rounded-xl">
+                    <div className="flex flex-col sm:flex-row items-center gap-1.5 bg-rose-50 border-2 border-rose-300 p-1.5 rounded-xl">
                       <button
                         type="button"
                         onClick={() => {
                           alEliminarTarea(tarea.id);
                           setTareaAEliminar(null);
                         }}
-                        className="min-h-[36px] px-2.5 bg-rose-600 text-white text-xs font-semibold rounded-lg hover:bg-rose-700 transition-colors"
+                        className="min-h-[44px] px-3 bg-rose-700 text-white text-base font-bold rounded-lg hover:bg-rose-800 transition-colors"
                       >
                         Confirmar
                       </button>
                       <button
                         type="button"
                         onClick={() => setTareaAEliminar(null)}
-                        className="min-h-[36px] px-2 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200 transition-colors"
+                        className="min-h-[44px] px-3 bg-slate-200 text-slate-900 text-base font-bold rounded-lg hover:bg-slate-300 transition-colors"
                       >
                         Cancelar
                       </button>
@@ -273,9 +259,9 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
                       onClick={() => setTareaAEliminar(tarea.id)}
                       aria-label={`Eliminar tarea ${tarea.titulo}`}
                       title="Eliminar tarea"
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                      className="min-w-[48px] min-h-[48px] flex items-center justify-center rounded-xl text-slate-600 hover:text-rose-700 hover:bg-rose-100 border border-slate-300 hover:border-rose-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   )}
                 </div>
