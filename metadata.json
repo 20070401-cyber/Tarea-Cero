@@ -1,0 +1,6 @@
+{
+  "name": "Tarea Cero",
+  "description": "Organizador de tareas escolares pendientes para estudiantes de bachillerato: registro rápido, lista visual e indicadores de estado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
