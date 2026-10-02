@@ -87,7 +87,18 @@ export function cargarTareasDesdeStorage(): Tarea[] {
 
     const parseado = JSON.parse(datosRaw);
     if (Array.isArray(parseado)) {
-      return parseado;
+      // Filtrar y validar integridad para no romper la app si el almacenamiento está alterado
+      const tareasValidas = parseado.filter(
+        (item): item is Tarea =>
+          item !== null &&
+          typeof item === 'object' &&
+          typeof item.id === 'string' &&
+          typeof item.materia === 'string' &&
+          typeof item.titulo === 'string' &&
+          typeof item.fechaEntrega === 'string' &&
+          typeof item.completada === 'boolean'
+      );
+      return tareasValidas;
     }
     return [];
   } catch (error) {

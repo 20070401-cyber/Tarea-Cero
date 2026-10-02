@@ -32,6 +32,13 @@ export const ListaTareas: React.FC<ListaTareasProps> = ({
 }) => {
   const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null);
 
+  // Auto-cancelar confirmación de eliminación tras 5 segundos sin interactuar
+  React.useEffect(() => {
+    if (!tareaAEliminar) return;
+    const temporizador = setTimeout(() => setTareaAEliminar(null), 5000);
+    return () => clearTimeout(temporizador);
+  }, [tareaAEliminar]);
+
   // 1. Filtrado de tareas según estado
   const tareasFiltradas = tareas.filter((t) => {
     if (filtro === 'pendientes') return !t.completada;

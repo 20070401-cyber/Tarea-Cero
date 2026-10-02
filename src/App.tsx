@@ -81,6 +81,20 @@ export default function App() {
    * Registrar nueva tarea con mensaje de éxito visible
    */
   const agregarTarea = (datosNuevaTarea: Omit<Tarea, 'id' | 'completada' | 'creadaEn'>) => {
+    // Evitar tareas idénticas duplicadas en pendientes
+    const yaExiste = tareas.some(
+      (t) =>
+        !t.completada &&
+        t.materia.toLowerCase() === datosNuevaTarea.materia.toLowerCase() &&
+        t.titulo.toLowerCase() === datosNuevaTarea.titulo.toLowerCase() &&
+        t.fechaEntrega === datosNuevaTarea.fechaEntrega
+    );
+
+    if (yaExiste) {
+      setMensajeExito(`Aviso: Ya tienes anotada esta misma tarea de ${datosNuevaTarea.materia}.`);
+      return;
+    }
+
     const nueva: Tarea = {
       ...datosNuevaTarea,
       id: generarIdSeguro(),

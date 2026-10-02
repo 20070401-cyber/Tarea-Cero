@@ -1,13 +1,14 @@
 /**
  * Componente: FormularioTarea
  * 
- * Cumplimiento de requisitos de interfaz:
+ * Cumplimiento de requisitos de interfaz y blindaje de validaciones (QA):
  * - 320 px de ancho: Operable con una sola mano y sin hacer zoom.
  * - Contraste alto para exteriores: Bordes nítidos y texto oscuro legible al sol.
  * - Tipografía mínima de 16 px en etiquetas, campos, botones y mensajes.
  * - Etiquetas visibles para todos los campos (no únicamente placeholders).
  * - UN SOLO botón principal en pantalla ("+ Agregar Tarea"); los demás son controles secundarios.
  * - Mensajes de error en español claro, sin tecnicismos ni jerga de programación.
+ * - Blindado contra: campos vacíos, espacios invisibles, títulos gigantes, doble clic, inyecciones y fechas incongruentes.
  */
 
 import React, { useState } from 'react';
@@ -32,12 +33,14 @@ const MATERIAS_BACHILLERATO = [
 
 export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea }) => {
   const hoyStr = obtenerFechaHoyISO();
+  const fechaMaxima = `${new Date().getFullYear() + 2}-12-31`;
 
   const [materia, setMateria] = useState('');
   const [titulo, setTitulo] = useState('');
   const [fechaEntrega, setFechaEntrega] = useState(hoyStr);
   const [prioridad, setPrioridad] = useState<Prioridad>('Media');
   const [mensajeError, setMensajeError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false); // Protección contra doble clic
 
   const seleccionarAtajoFecha = (diasAdicionales: number) => {
     const fecha = new Date();
@@ -48,13 +51,25 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
     setFechaEntrega(`${year}-${month}-${day}`);
   };
 
+  /**
+   * Sanitización contra espacios invisibles de ancho cero y etiquetas
+   */
+  const limpiarTexto = (texto: string) => {
+    return texto
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Elimina zero-width spaces
+      .replace(/[<>]/g, '')                   // Previene inyecciones de tags
+      .trim();
+  };
+
   const manejarEnvio = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const materiaLimpia = materia.trim();
-    const tituloLimpio = titulo.trim();
+    // Bloqueo inmediato para evitar doble submit por toques rápidos
+    if (enviando) return;
 
-    // Mensajes comprensibles en español cotidiano
+    const materiaLimpia = limpiarTexto(materia);
+    const tituloLimpio = limpiarTexto(titulo);
+
     if (!materiaLimpia) {
       setMensajeError('Por favor escribe o toca una materia para tu tarea.');
       return;
@@ -65,12 +80,15 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
       return;
     }
 
-    if (!fechaEntrega) {
-      setMensajeError('Por favor indica qué día debes entregar tu tarea.');
+    // Validación estricta de formato AAAA-MM-DD
+    const esFechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega);
+    if (!fechaEntrega || !esFechaValida) {
+      setMensajeError('Por favor selecciona una fecha de entrega válida.');
       return;
     }
 
     setMensajeError(null);
+    setEnviando(true);
 
     alGuardarTarea({
       materia: materiaLimpia,
@@ -80,6 +98,11 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
     });
 
     setTitulo('');
+
+    // Liberar bloqueo tras 400ms
+    setTimeout(() => {
+      setEnviando(false);
+    }, 400);
   };
 
   return (
@@ -111,6 +134,7 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
           <input
             id="campo-materia"
             type="text"
+            maxLength={50}
             value={materia}
             onChange={(e) => {
               setMateria(e.target.value);
@@ -147,17 +171,23 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
           </div>
         </div>
 
-        {/* Campo 2: Título con etiqueta visible */}
+        {/* Campo 2: Título con etiqueta visible y límite de 120 caracteres */}
         <div>
-          <label
-            htmlFor="campo-titulo"
-            className="block text-base font-bold text-slate-900 mb-1.5"
-          >
-            2. Título o Descripción de la tarea <span className="text-rose-600">*</span>
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label
+              htmlFor="campo-titulo"
+              className="block text-base font-bold text-slate-900"
+            >
+              2. Título o Descripción de la tarea <span className="text-rose-600">*</span>
+            </label>
+            <span className="text-sm font-semibold text-slate-500 tabular-nums">
+              {titulo.length}/120
+            </span>
+          </div>
           <input
             id="campo-titulo"
             type="text"
+            maxLength={120}
             value={titulo}
             onChange={(e) => {
               setTitulo(e.target.value);
@@ -168,7 +198,7 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
           />
         </div>
 
-        {/* Campo 3: Fecha de entrega con etiqueta visible */}
+        {/* Campo 3: Fecha de entrega con límites de fecha min y max */}
         <div>
           <label
             htmlFor="campo-fecha-entrega"
@@ -179,6 +209,8 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
           <input
             id="campo-fecha-entrega"
             type="date"
+            min={hoyStr}
+            max={fechaMaxima}
             value={fechaEntrega}
             onChange={(e) => setFechaEntrega(e.target.value)}
             className="w-full h-12 px-3.5 text-base font-semibold text-slate-950 bg-slate-50 border-2 border-slate-400 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
@@ -218,7 +250,6 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
           <label className="block text-base font-bold text-slate-900 mb-1.5">
             4. Nivel de prioridad
           </label>
-          {/* Botones secundarios para seleccionar prioridad */}
           <div className="grid grid-cols-3 gap-2">
             {(['Baja', 'Media', 'Alta'] as Prioridad[]).map((p) => {
               const seleccionado = prioridad === p;
@@ -243,14 +274,14 @@ export const FormularioTarea: React.FC<FormularioTareaProps> = ({ alGuardarTarea
           </div>
         </div>
 
-        {/* 
-          REQUISITO 4: UN SOLO BOTÓN PRINCIPAL POR PANTALLA ("+ Agregar Tarea").
-          Destaca con color índigo saturado, contraste 7:1 y tamaño prominente.
-        */}
+        {/* ÚNICO BOTÓN PRINCIPAL */}
         <div className="pt-2">
           <button
             type="submit"
-            className="w-full min-h-[52px] px-4 py-3 bg-indigo-700 hover:bg-indigo-800 active:scale-[0.99] text-white font-bold text-base rounded-xl shadow-md flex items-center justify-center gap-2 border-2 border-indigo-900"
+            disabled={enviando}
+            className={`w-full min-h-[52px] px-4 py-3 bg-indigo-700 hover:bg-indigo-800 active:scale-[0.99] text-white font-bold text-base rounded-xl shadow-md flex items-center justify-center gap-2 border-2 border-indigo-900 ${
+              enviando ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
           >
             <Plus className="w-5 h-5 stroke-[3]" />
             <span>+ Agregar Tarea</span>
