@@ -13,7 +13,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CheckSquare, BookOpen, GraduationCap, Download, RotateCcw, CheckCircle2, X } from 'lucide-react';
-import { Tarea, FiltroEstado, MetricasTareas } from './types/tarea';
+import { Tarea, FiltroEstado, MetricasTareas, PasoDesglose, PlanIA } from './types/tarea';
 import { estaVencida, esParaHoy, esFechaDeHoy } from './utils/dateUtils';
 import {
   cargarTareasDesdeStorage,
@@ -22,6 +22,7 @@ import {
   borrarTareasDeStorage,
   generarTareasIniciales
 } from './utils/storage';
+import { solicitarDesgloseGemini } from './services/geminiService';
 import { IndicadoresRapidos } from './components/IndicadoresRapidos';
 import { FormularioTarea } from './components/FormularioTarea';
 import { ListaTareas } from './components/ListaTareas';
@@ -134,12 +135,81 @@ export default function App() {
     );
   };
 
+  const [cargandoIAId, setCargandoIAId] = useState<string | null>(null);
+  const [errorIAId, setErrorIAId] = useState<{ id: string; mensaje: string } | null>(null);
+
   /**
    * Eliminar tarea con confirmación
    */
   const eliminarTarea = (id: string) => {
     setTareas((prev) => prev.filter((t) => t.id !== id));
     setMensajeExito('La tarea fue eliminada de tu lista.');
+  };
+
+  /**
+   * Desglosar tarea en plan de 3 a 5 pasos con Gemini API
+   */
+  const manejarDesgloseIA = async (id: string, usarModoPrueba = false) => {
+    const tarea = tareas.find((t) => t.id === id);
+    if (!tarea) return;
+
+    setCargandoIAId(id);
+    setErrorIAId(null);
+
+    const resultado = await solicitarDesgloseGemini(tarea.materia, tarea.titulo, usarModoPrueba);
+
+    setCargandoIAId(null);
+
+    if (!resultado.exito || !resultado.datos) {
+      setErrorIAId({
+        id,
+        mensaje: resultado.error || "No pudimos conectar con el asistente de IA. Intenta de nuevo más tarde"
+      });
+      return;
+    }
+
+    // Convertir el arreglo de cadenas a pasos interactivos con casillas de verificación
+    const pasosInteractivas: PasoDesglose[] = resultado.datos.pasos.map((textoPaso, index) => ({
+      id: `paso-${Date.now()}-${index}`,
+      texto: textoPaso,
+      completado: false
+    }));
+
+    const nuevoPlan: PlanIA = {
+      pasos: pasosInteractivas,
+      tiempoEstimadoMinutos: resultado.datos.tiempoEstimadoMinutos,
+      consejoEstudio: resultado.datos.consejoEstudio,
+      generadoEn: new Date().toISOString()
+    };
+
+    setTareas((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, planIA: nuevoPlan } : t))
+    );
+
+    setMensajeExito(`¡Plan de estudio generado para ${tarea.materia}!`);
+  };
+
+  /**
+   * Alternar estado de una casilla de verificación dentro del plan de estudio
+   */
+  const alternarPasoIA = (tareaId: string, pasoId: string) => {
+    setTareas((prev) =>
+      prev.map((t) => {
+        if (t.id !== tareaId || !t.planIA) return t;
+
+        const nuevosPasos = t.planIA.pasos.map((p) =>
+          p.id === pasoId ? { ...p, completado: !p.completado } : p
+        );
+
+        return {
+          ...t,
+          planIA: {
+            ...t.planIA,
+            pasos: nuevosPasos
+          }
+        };
+      })
+    );
   };
 
   /**
@@ -241,13 +311,17 @@ export default function App() {
         {/* Formulario con el ÚNICO botón principal ("+ Agregar Tarea") */}
         <FormularioTarea alGuardarTarea={agregarTarea} />
 
-        {/* Lista visual con estado vacío animado y filtros secundarios */}
+        {/* Lista visual con estado vacío animado, filtros secundarios y desglose de Gemini */}
         <ListaTareas
           tareas={tareas}
           filtro={filtroActivo}
           alCambiarFiltro={setFiltroActivo}
           alAlternarCompletada={alternarCompletada}
           alEliminarTarea={eliminarTarea}
+          alDesglosarConIA={manejarDesgloseIA}
+          alAlternarPasoIA={alternarPasoIA}
+          cargandoIAId={cargandoIAId}
+          errorIAId={errorIAId}
         />
 
         {/* Pie de página accesible */}
